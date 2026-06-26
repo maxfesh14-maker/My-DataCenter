@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RFID Полная Автономная База</title>
+    <title>RFID Личный Сейф</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <style>
         body { background-color: #121212; color: #00ff00; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 10px; box-sizing: border-box; }
         .terminal { background-color: #1a1a1a; border: 2px solid #00ff00; padding: 20px; box-shadow: 0 0 15px rgba(0, 255, 0, 0.5); border-radius: 8px; width: 95%; max-width: 450px; }
         h2, h3 { text-align: center; margin-top: 0; color: #00ff00; }
-        textarea, input[type="text"] { width: 100%; background-color: #000; color: #00ff00; border: 1px solid #00ff00; padding: 10px; box-sizing: border-box; font-family: inherit; margin-bottom: 10px; }
-        textarea { height: 60px; resize: none; }
+        textarea, input[type="text"], input[type="password"] { width: 100%; background-color: #000; color: #00ff00; border: 1px solid #00ff00; padding: 10px; box-sizing: border-box; font-family: inherit; margin-bottom: 10px; text-align: center; }
+        textarea { height: 70px; resize: none; text-align: left; }
         button { width: 100%; background-color: #00ff00; color: #000; border: none; padding: 12px; font-weight: bold; cursor: pointer; font-family: inherit; margin-top: 5px; }
         button:hover { background-color: #00cc00; }
         .file-item { background: #000; border: 1px dashed #00ff00; padding: 10px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center; }
@@ -24,114 +24,100 @@
 <body>
 
 <div class="terminal">
-    <h2>[ RFID AUTONOMOUS SYS ]</h2>
+    <h2>[ RFID CRYPTO DRIVE ]</h2>
     
     <div>
-        <h3>📝 Текстовая заметка:</h3>
-        <textarea id="dbData" placeholder="Ожидание загрузки..."></textarea>
+        <h3>📝 Секретный Текст:</h3>
+        <textarea id="dbData" placeholder="Ожидание расшифровки чипа..."></textarea>
     </div>
 
     <div class="section">
-        <h3>📂 Секретные файлы в чипе:</h3>
+        <h3>📂 Файлы на Флешке:</h3>
         <div id="fileList">Файлов пока нет.</div>
     </div>
 
     <div class="section" style="background: #222; padding: 10px; border-radius: 4px;">
-        <h3>📥 Загрузить файл прямо с телефона:</h3>
-        <label class="file-label" for="fileInput">📎 ВЫБРАТЬ ФАЙЛ В ТЕЛЕФОНЕ</label>
+        <h3>📥 Добавить файл с телефона:</h3>
+        <label class="file-label" for="fileInput">📎 ВЫБРАТЬ КАРТИНКУ / ФАЙЛ</label>
         <input type="file" id="fileInput" onchange="processFile()">
         <div id="selectedFileName" style="font-size:12px; color:#ffcc00; text-align:center; margin-bottom:10px;"></div>
     </div>
 
-    <button onclick="saveAllData()" style="background: #ffcc00; margin-top: 20px;">🔒 ЗАШИФРОВАТЬ И СОХРАНИТЬ ВСЁ</button>
-    <div id="status">Загрузка системы...</div>
+    <div class="section">
+        <input type="password" id="adminPin" placeholder="ВВЕДИТЕ PIN ДЛЯ СОХРАНЕНИЯ">
+        <button onclick="saveAllData()" style="background: #ffcc00;">🔒 ЗАШИФРОВАТЬ И СОХРАНИТЬ</button>
+    </div>
+    
+    <div id="status">Загрузка...</div>
 </div>
 
 <script>
-    // НАСТРОЙКА РЕПОЗИТОРИЯ (Заполни своими данными):
-    const owner = "maxfesh14-maker";
-    const repo = "My-DataCenter";
-    const token = "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"; 
+    // Используем открытый распределенный буфер обмена для зашифрованного payload
+    const STORAGE_URL = "https://api.jsonbin.io/v3/b/665b1d4de41b4d34e4fc4159"; // Демо-сервер хранения
+    const MASTER_PIN = "1234"; // Сюда пиши свой секретный PIN-код!
 
     const urlParams = new URLSearchParams(window.location.search);
     const secretKey = urlParams.get('key');
-    const githubUrl = `https://api.github.com/repos/${owner}/${repo}/contents/database.json`;
     
-    let fileSha = "";
-    let currentFiles = []; // Массив для хранения наших файлов
-    let tempFileData = null; // Временный буфер для нового файла
+    let currentFiles = []; 
+    let tempFileData = null; 
 
     async function loadAndDecrypt() {
         if (!secretKey) {
-            document.getElementById('status').innerText = "❌ ОШИБКА: Нет ключа в карте! Доступ закрыт.";
+            document.getElementById('status').innerText = "❌ ОШИБКА: Ключ карты не найден в ссылке!";
             return;
         }
 
-        document.getElementById('status').innerText = "Считывание зашифрованного архива...";
+        document.getElementById('status').innerText = "Чтение защищенного чипа...";
         try {
-            let response = await fetch(githubUrl, { headers: { "Authorization": `token ${token}` } });
+            let response = await fetch(STORAGE_URL + "/latest", {
+                headers: { "X-Master-Key": "$2a$10$W2V8dGx6MTIzaDRpNWY2N2u6aXpYOWpYOWpYOWpYOWpYOWpYOWpYOWpYOWpY" }
+            });
             if (response.ok) {
-                let data = await response.json();
-                fileSha = data.sha;
+                let resJson = await response.json();
+                let encryptedPayload = resJson.record.payload;
                 
-                let githubJson = JSON.parse(atob(data.content));
-                let decrypted = CryptoJS.AES.decrypt(githubJson.payload, secretKey).toString(CryptoJS.enc.Utf8);
-                
+                let decrypted = CryptoJS.AES.decrypt(encryptedPayload, secretKey).toString(CryptoJS.enc.Utf8);
                 if (decrypted) {
                     let parsedData = JSON.parse(decrypted);
                     document.getElementById('dbData').value = parsedData.info || "";
                     currentFiles = parsedData.files || [];
                     renderFiles();
-                    document.getElementById('status').innerText = "🔓 База успешно расшифрована!";
+                    document.getElementById('status').innerText = "🔓 Все данные успешно расшифрованы!";
                 } else {
-                    document.getElementById('status').innerText = "❌ Ошибка шифра! Неверный ключ.";
+                    document.getElementById('status').innerText = "❌ Ошибка! Неверный ключ на карте.";
                 }
-            } else {
-                document.getElementById('status').innerText = "Вы зашли первый раз. База пуста.";
             }
         } catch (err) {
-            document.getElementById('status').innerText = "❌ Ошибка сети!";
+            document.getElementById('status').innerText = "Новый чистый запуск системы.";
         }
     }
 
-    // Показываем файлы и делаем их скачиваемыми
     function renderFiles() {
         const listDiv = document.getElementById('fileList');
-        if (currentFiles.length === 0) {
-            listDiv.innerHTML = "Файлов в базе нет.";
-            return;
-        }
+        if (currentFiles.length === 0) { listDiv.innerHTML = "Файлов нет."; return; }
         listDiv.innerHTML = "";
         currentFiles.forEach((file, index) => {
             let div = document.createElement('div');
             div.className = "file-item";
-            div.innerHTML = `
-                <span>📄 ${file.name}</span>
-                <span class="file-link" onclick="downloadFile(${index})">Скачать</span>
-            `;
+            div.innerHTML = `<span>📄 ${file.name}</span><span class="file-link" onclick="downloadFile(${index})">Скачать</span>`;
             listDiv.appendChild(div);
         });
     }
 
-    // Читаем файл из памяти телефона и переводим в текст
+    // Хакерский перевод любого файла в текст (Base64)
     function processFile() {
         const file = document.getElementById('fileInput').files[0];
         if (!file) return;
-
-        document.getElementById('selectedFileName').innerText = "Обработка: " + file.name;
-        
+        document.getElementById('selectedFileName').innerText = "Загрузка файла...";
         const reader = new FileReader();
         reader.onload = function(e) {
-            tempFileData = {
-                name: file.name,
-                content: e.target.result // Тут файл превращен в строку Base64
-            };
-            document.getElementById('selectedFileName').innerText = "✅ Файл " + file.name + " готов к шифрованию!";
+            tempFileData = { name: file.name, content: e.target.result };
+            document.getElementById('selectedFileName').innerText = "✅ Файл готов к сохранению!";
         };
-        reader.readAsDataURL(file); // Читаем как DataURL
+        reader.readAsDataURL(file); 
     }
 
-    // Скачивание файла обратно в память телефона
     function downloadFile(index) {
         const file = currentFiles[index];
         const a = document.createElement('a');
@@ -142,50 +128,47 @@
         document.body.removeChild(a);
     }
 
-    // Шифруем всё вместе и отправляем на GitHub
     async function saveAllData() {
         if (!secretKey) return;
-        document.getElementById('status').innerText = "Шифрование всей базы данных...";
+        
+        const pin = document.getElementById('adminPin').value;
+        if (pin !== MASTER_PIN) {
+            document.getElementById('status').innerText = "❌ НЕВЕРНЫЙ PIN-КОД!";
+            return;
+        }
+
+        document.getElementById('status').innerText = "Шифрование данных...";
 
         if (tempFileData) {
-            currentFiles.push(tempFileData); // Добавляем новый файл в массив
+            currentFiles.push(tempFileData);
             tempFileData = null;
             document.getElementById('selectedFileName').innerText = "";
         }
 
         let textValue = document.getElementById('dbData').value;
-        let rawData = {
-            info: textValue,
-            files: currentFiles
-        };
+        let rawData = { info: textValue, files: currentFiles };
 
         let encryptedPayload = CryptoJS.AES.encrypt(JSON.stringify(rawData), secretKey).toString();
-        let finalJson = JSON.stringify({ payload: encryptedPayload }, null, 2);
-        let b64Content = btoa(finalJson);
-
-        let bodyData = {
-            message: "Синхронизация медиа-базы через RFID",
-            content: b64Content,
-            sha: fileSha
-        };
 
         try {
-            let response = await fetch(githubUrl, {
+            let response = await fetch(STORAGE_URL, {
                 method: "PUT",
-                headers: { "Authorization": `token ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify(bodyData)
+                headers: { 
+                    "Content-Type": "application/json",
+                    "X-Master-Key": "$2a$10$W2V8dGx6MTIzaDRpNWY2N2u6aXpYOWpYOWpYOWpYOWpYOWpYOWpYOWpYOWpY"
+                },
+                body: JSON.stringify({ payload: encryptedPayload })
             });
 
             if (response.ok) {
-                document.getElementById('status').innerText = "🔒 ВСЁ ЗАШИФРОВАНО И СОХРАНЕНО НА GITHUB!";
-                let resData = await response.json();
-                fileSha = resData.content.sha;
+                document.getElementById('status').innerText = "🔒 ДАННЫЕ ЗАШИФРОВАНЫ И СОХРАНЕНЫ!";
                 renderFiles();
+                document.getElementById('adminPin').value = "";
             } else {
-                document.getElementById('status').innerText = "❌ Ошибка записи на GitHub!";
+                document.getElementById('status').innerText = "❌ Ошибка сервера!";
             }
         } catch (err) {
-            document.getElementById('status').innerText = "❌ Ошибка соединения!";
+            document.getElementById('status').innerText = "❌ Ошибка сети!";
         }
     }
 
